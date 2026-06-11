@@ -7,7 +7,7 @@ app.use(cors());
 app.use(express.json());
 
 const REPLICATE_TOKEN = process.env.REPLICATE_TOKEN;
-const ANTHROPIC_KEY = process.env.ANTHROPIC_KEY;
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
@@ -30,12 +30,10 @@ RULES:
 - Handle objections with empathy
 - Never be pushy`;
 
-// Health check
 app.get("/", (req, res) => {
   res.json({ status: "Amarachi Bot Server is running!" });
 });
 
-// WhatsApp webhook verification
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
@@ -47,7 +45,6 @@ app.get("/webhook", (req, res) => {
   }
 });
 
-// WhatsApp webhook handler
 app.post("/webhook", async (req, res) => {
   res.sendStatus(200);
   try {
@@ -60,23 +57,24 @@ app.post("/webhook", async (req, res) => {
     const text = message.text.body;
 
     const aiResponse = await axios.post(
-      "https://api.anthropic.com/v1/messages",
+      "https://api.groq.com/openai/v1/chat/completions",
       {
-        model: "claude-sonnet-4-6",
+        model: "llama3-70b-8192",
         max_tokens: 500,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: "user", content: text }],
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: text }
+        ],
       },
       {
         headers: {
-          "x-api-key": ANTHROPIC_KEY,
-          "anthropic-version": "2023-06-01",
+          "Authorization": `Bearer ${GROQ_API_KEY}`,
           "Content-Type": "application/json",
         },
       }
     );
 
-    const reply = aiResponse.data.content[0].text;
+    const reply = aiResponse.data.choices[0].message.content;
 
     await axios.post(
       `https://graph.facebook.com/v18.0/${PHONE_NUMBER_ID}/messages`,
@@ -97,7 +95,6 @@ app.post("/webhook", async (req, res) => {
   }
 });
 
-// Video generation proxy
 app.post("/generate-video", async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -117,7 +114,6 @@ app.post("/generate-video", async (req, res) => {
   }
 });
 
-// Poll video status
 app.get("/video-status/:id", async (req, res) => {
   try {
     const response = await axios.get(
